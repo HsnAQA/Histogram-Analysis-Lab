@@ -1,0 +1,2 @@
+matplotlib==3.10.7
+jes4py==0.1.7
