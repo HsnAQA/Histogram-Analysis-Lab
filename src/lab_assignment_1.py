@@ -305,4 +305,4 @@ if __name__ == "__main__":
         else:
             print(f"  Selection cancelled for '{category}'. Skipping.")
 
-    print("\nTask complete.")
+    print("\nTask complete.") 
