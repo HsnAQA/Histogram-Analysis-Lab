@@ -57,4 +57,4 @@ if __name__ == "__main__":
         print(f"Michelson Contrast : {michelson:.4f}")
         print(f"RMS Contrast       : {rms:.4f}")
         print(f"Decision           : {'Enhancement REQUIRED' if needs_enhancement else 'Enhancement NOT REQUIRED'}")
-        print("-" * 30)
+        print("-" * 30) 
