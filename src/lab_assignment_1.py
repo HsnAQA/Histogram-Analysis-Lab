@@ -10,6 +10,12 @@ def convert_to_grayscale_and_get_hist(pic):
     """
     Transforms the input image into a grayscale version and calculates
     the intensity distribution (histogram) manually.
+
+    Grayscale conversion uses the luminosity-weighted method:
+        gray = 0.299*R + 0.587*G + 0.114*B
+    This is perceptually more accurate than simple averaging because
+    the human eye is more sensitive to green than red or blue.
+    (ITU-R BT.601 standard)
     """
     hist = [0] * 256
     pixels = getPixels(pic)
@@ -17,8 +23,9 @@ def convert_to_grayscale_and_get_hist(pic):
         r = getRed(p)
         g = getGreen(p)
         b = getBlue(p)
-        # Applying the average method for grayscale conversion
-        gray_value = int((r + g + b) / 3)
+        # Luminosity-weighted grayscale conversion
+        gray_value = int(0.299 * r + 0.587 * g + 0.114 * b)
+        gray_value = max(0, min(255, gray_value))
         setColor(p, makeColor(gray_value, gray_value, gray_value))
         hist[gray_value] += 1
     return hist, pic
@@ -35,8 +42,48 @@ def plot_histogram(hist, title_text):
     plt.ylabel("Frequency")
     plt.xlim([0, 255])
     plt.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
     # Non-blocking show allows viewing multiple results simultaneously
     plt.show(block=False)
+
+
+def describe_distribution(hist):
+    """
+    Provides a brief textual analysis of the histogram distribution.
+    Identifies whether the distribution is clustered or spread
+    based on the actual min and max intensity values present in the image.
+    """
+    total = sum(hist)
+    if total == 0:
+        return "No data."
+
+    # Find actual min and max intensity values that have at least one pixel
+    min_intensity = 0
+    max_intensity = 255
+    for i in range(256):
+        if hist[i] > 0:
+            min_intensity = i
+            break
+    for i in range(255, -1, -1):
+        if hist[i] > 0:
+            max_intensity = i
+            break
+
+    spread = max_intensity - min_intensity
+    non_zero_bins = sum(1 for v in hist if v > 0)
+
+    if spread < 60:
+        distribution_type = "Clustered — Low Contrast"
+    elif spread < 150:
+        distribution_type = "Moderately spread — Normal Contrast"
+    else:
+        distribution_type = "Widely spread — High Contrast"
+
+    return (
+        f"Intensity range: {min_intensity}–{max_intensity} "
+        f"(spread={spread}, active bins={non_zero_bins}/256). "
+        f"{distribution_type}."
+    )
 
 
 # =============================================================================
@@ -60,7 +107,11 @@ def get_min_max_intensity(pic):
 
 def compute_michelson_contrast(pic):
     """
-    Computes Michelson Contrast based on manual min/max detection.
+    Computes Michelson Contrast: (max - min) / (max + min).
+    Interpretation (as per lecture slides):
+        - Close to 0      → Low contrast
+        - 0.25 to 0.75    → Normal contrast
+        - Close to 1      → High contrast
     """
     min_val, max_val = get_min_max_intensity(pic)
     if (max_val + min_val) == 0:
@@ -70,7 +121,14 @@ def compute_michelson_contrast(pic):
 
 def compute_rms_contrast(pic):
     """
-    Computes RMS Contrast (Standard Deviation) manually.
+    Computes RMS Contrast (Standard Deviation of pixel intensities).
+    Since intensity ranges 0–255, the max possible std dev is ~127.5.
+    A threshold of 40.0 (~31% of max) aligns proportionally with the
+    Michelson low-contrast boundary of 0.25.
+    Interpretation:
+        - Below 40   → Low contrast  (enhancement recommended)
+        - 40 to 80   → Normal contrast
+        - Above 80   → High contrast
     """
     pixels = getPixels(pic)
     total_pixels = len(pixels)
@@ -83,7 +141,7 @@ def compute_rms_contrast(pic):
         sum_intensity += getRed(p)
     mean_intensity = float(sum_intensity) / total_pixels
 
-    # Calculate Sum of Squared Differences
+    # Calculate Sum of Squared Differences from Mean
     sum_squared_diff = 0
     for p in pixels:
         val = getRed(p)
@@ -99,43 +157,71 @@ def compute_rms_contrast(pic):
 # =============================================================================
 def equalize_histogram_manually(pic, hist):
     """
-    Manual implementation of Histogram Equalization using CDF.
+    Manual implementation of Histogram Equalization following the exact
+    4-step algorithm as presented in the CPIT380 lecture slides.
+
+    Algorithm Steps:
+        Step 1: Compute the CDF (Cumulative Frequency Distribution) of the original histogram.
+        Step 2: Compute Feq — the ideal equalized histogram (total_pixels / 256 per bin).
+        Step 3: Compute CuFeq — the cumulative frequency of the equalized histogram.
+        Step 4: Design the mapping — for each original intensity, find the output intensity
+                whose CuFeq is closest to the original CDF value.
     """
     total_pixels = getWidth(pic) * getHeight(pic)
 
-    # 1. Generate Cumulative Distribution Function (CDF)
+    # ------------------------------------------------------------------
+    # Step 1: Compute CDF of the original histogram
+    # cdf[i] = total number of pixels with intensity <= i
+    # ------------------------------------------------------------------
     cdf = [0] * 256
     cdf[0] = hist[0]
     for i in range(1, 256):
         cdf[i] = cdf[i - 1] + hist[i]
 
-    # 2. Identify CDF Minimum non-zero value
-    cdf_min = 0
-    for val in cdf:
-        if val > 0:
-            cdf_min = val
-            break
+    # ------------------------------------------------------------------
+    # Step 2: Compute Feq — the ideal equalized histogram
+    # Each bin ideally holds (total_pixels / 256) pixels.
+    # Remainder pixels are distributed across the first bins.
+    # ------------------------------------------------------------------
+    base_count = total_pixels // 256
+    remainder = total_pixels % 256
+    feq = []
+    for i in range(256):
+        feq.append(base_count + (1 if i < remainder else 0))
 
-    # 3. Create Mapping Table
+    # ------------------------------------------------------------------
+    # Step 3: Compute CuFeq — cumulative frequency of the equalized histogram
+    # ------------------------------------------------------------------
+    cufeq = [0] * 256
+    cufeq[0] = feq[0]
+    for i in range(1, 256):
+        cufeq[i] = cufeq[i - 1] + feq[i]
+
+    # ------------------------------------------------------------------
+    # Step 4: Design the mapping
+    # For each input intensity, find the output intensity whose CuFeq
+    # is closest to the input's CDF value (as shown in the lecture slides).
+    # ------------------------------------------------------------------
     mapping = [0] * 256
     for i in range(256):
-        numerator = cdf[i] - cdf_min
-        denominator = total_pixels - cdf_min
-        if denominator <= 0:
-            mapping[i] = 0
-        else:
-            # Equalization formula mapping
-            new_val = int(round((float(numerator) / denominator) * 255.0))
-            mapping[i] = max(0, min(255, new_val))
+        target = cdf[i]
+        best_match = 0
+        best_diff = abs(cufeq[0] - target)
+        for j in range(1, 256):
+            diff = abs(cufeq[j] - target)
+            if diff < best_diff:
+                best_diff = diff
+                best_match = j
+        mapping[i] = best_match
 
-    # 4. Apply transformation to the image
+    # Apply the mapping and build the new histogram for verification
     new_hist = [0] * 256
     pixels = getPixels(pic)
     for p in pixels:
         old_val = getRed(p)
-        new_mapped_val = mapping[old_val]
-        setColor(p, makeColor(new_mapped_val, new_mapped_val, new_mapped_val))
-        new_hist[new_mapped_val] += 1
+        new_val = mapping[old_val]
+        setColor(p, makeColor(new_val, new_val, new_val))
+        new_hist[new_val] += 1
 
     return new_hist, pic
 
@@ -143,9 +229,9 @@ def equalize_histogram_manually(pic, hist):
 # =============================================================================
 # MODULE: INTEGRATED PIPELINE (TASK 4)
 # =============================================================================
-def run_analysis_pipeline(pic_path, category):
+def run_analysis_pipeline(pic_path, category, is_last=False):
     """
-    Orchestrates the full image processing workflow.
+    Orchestrates the full image processing workflow for a single image.
     """
     # Initialize Pictures & Apply Grayscale Mode Compatibility Fix
     original_pic = makePicture(pic_path)
@@ -156,40 +242,46 @@ def run_analysis_pipeline(pic_path, category):
     if proc_pic.image.mode != "RGB":
         proc_pic.image = proc_pic.image.convert("RGB")
 
-    # Process Tasks
+    # --- Task 1: Grayscale + Histogram ---
     original_hist, gray_pic = convert_to_grayscale_and_get_hist(proc_pic)
+    distribution_desc = describe_distribution(original_hist)
+
+    # --- Task 2: Contrast Measurement ---
     michelson = compute_michelson_contrast(gray_pic)
     rms = compute_rms_contrast(gray_pic)
-
-    # Decision Logic
     needs_enhancement = michelson < 0.25 or rms < 40.0
 
-    # Generate Results
+    michelson_label = (
+        "Low" if michelson < 0.25 else "Normal" if michelson <= 0.75 else "High"
+    )
+    rms_label = "Low" if rms < 40.0 else "Normal" if rms <= 80.0 else "High"
+
+    # --- Task 3: Histogram Equalization ---
     new_hist, equalized_pic = equalize_histogram_manually(gray_pic, original_hist)
 
-    # Console Reporting Summary
-    print("\n" + "=" * 50)
-    print(f" ANALYSIS SUMMARY: {category.upper()}")
-    print("=" * 50)
-    print(f"1. Michelson Contrast : {michelson:.4f}")
-    print(f"2. RMS Contrast       : {rms:.4f}")
+    # --- Console Reporting Summary ---
+    print("\n" + "=" * 55)
+    print(f"  ANALYSIS SUMMARY: {category.upper()}")
+    print("=" * 55)
+    print(f"Distribution  : {distribution_desc}")
+    print(f"Michelson     : {michelson:.4f}  → {michelson_label} contrast")
+    print(f"RMS           : {rms:.4f}  → {rms_label} contrast")
     print(
-        f"3. Decision           : {'Enhancement REQUIRED' if needs_enhancement else 'Enhancement NOT REQUIRED'}"
+        f"Decision      : {'Enhancement REQUIRED' if needs_enhancement else 'Enhancement NOT REQUIRED'}"
     )
-    print("-" * 50)
+    print("-" * 55)
 
-    # Visualization
+    # --- Visualization ---
     show(original_pic)
-    plot_histogram(original_hist, f"Initial Histogram ({category})")
+    plot_histogram(original_hist, f"Before Equalization ({category})")
     show(equalized_pic)
-    plot_histogram(new_hist, f"Equalized Histogram ({category})")
+    plot_histogram(new_hist, f"After Equalization ({category})")
 
-    # Workflow Pause
-    input(
-        ">>> Process paused. Press ENTER to clear data and proceed to the next image..."
-    )
-
-    # Clean up plots for the next category
+    # Workflow Pause — message changes based on whether this is the last image
+    if is_last:
+        input(">>> All images processed. Press ENTER to exit the program...")
+    else:
+        input(">>> Press ENTER to proceed to the next image...")
     plt.close("all")
 
 
@@ -197,18 +289,20 @@ def run_analysis_pipeline(pic_path, category):
 # MAIN EXECUTION BLOCK
 # =============================================================================
 if __name__ == "__main__":
-    # Test cases as per submission requirements
     test_categories = ["Low Contrast", "Normal Contrast", "High Contrast"]
 
-    print("Starting Lab Assignment 1: Digital Image Processing Analysis")
-    print("Sequential processing for required image categories initialized.")
+    print("=" * 55)
+    print("  Lab Assignment 1: Histogram Analysis & Contrast Enhancement")
+    print("=" * 55)
+    print("You will be prompted to select 3 images (Low / Normal / High contrast).")
 
-    for category in test_categories:
-        print(f"\nPrompt: Select image for category -> {category}")
+    for index, category in enumerate(test_categories):
+        print(f"\n>>> Select image for: {category}")
         image_path = pickAFile()
         if image_path:
-            run_analysis_pipeline(image_path, category)
+            is_last = index == len(test_categories) - 1
+            run_analysis_pipeline(image_path, category, is_last)
         else:
-            print(f"Category '{category}' selection was cancelled.")
+            print(f"  Selection cancelled for '{category}'. Skipping.")
 
-    print("\nTask execution finalized. All data processed.") 
+    print("\nTask complete.")
