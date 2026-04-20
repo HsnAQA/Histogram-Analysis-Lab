@@ -42,4 +42,4 @@ The system is designed to handle multiple test cases sequentially. It provides a
 1. Ensure the jes4py and matplotlib libraries are installed.
 2. Clone the repository and navigate to the project directory.
 3. Execute the integrated script: Task4_MainPipeline.py.
-4. Follow the interactive prompts to select your image files for analysis.
+4. Follow the interactive prompts to select your image files for analysis. 
