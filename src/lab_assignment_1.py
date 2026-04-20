@@ -211,4 +211,4 @@ if __name__ == "__main__":
         else:
             print(f"Category '{category}' selection was cancelled.")
 
-    print("\nTask execution finalized. All data processed.")
+    print("\nTask execution finalized. All data processed.") 
