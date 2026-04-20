@@ -40,4 +40,4 @@ if __name__ == "__main__":
         
         hist, gray_pic = convert_to_grayscale_and_get_hist(pic)
         show(gray_pic)
-        plot_histogram(hist, "Task 1: Histogram Analysis")
+        plot_histogram(hist, "Task 1: Histogram Analysis") 
