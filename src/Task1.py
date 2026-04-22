@@ -1,30 +1,24 @@
 import matplotlib.pyplot as plt
 from jes4py import *
 
+def getLuminance(px):
+    newRed = getRed(px) * 0.299
+    newGreen = getGreen(px) * 0.587
+    newBlue = getBlue(px) * 0.114
+    luminance = newRed+newGreen+newBlue
+    return luminance
 
-def convert_to_grayscale_and_get_hist(pic):
-    """
-    Transforms the input image into a grayscale version and calculates
-    the intensity distribution (histogram) manually.
+def greyScale(pic):
+    for px in getPixels(pic):
+        luminance = getLuminance(px)
+        setColor(px,makeColor(luminance,luminance,luminance))
+    return pic
 
-    Grayscale conversion uses the luminosity-weighted method:
-        gray = 0.299*R + 0.587*G + 0.114*B
-    This method is perceptually more accurate than simple averaging
-    because the human eye is more sensitive to green than red or blue.
-    (Simple average: gray = (R + G + B) / 3 — less perceptually accurate)
-    """
+def getHist(pic):
     hist = [0] * 256
-    pixels = getPixels(pic)
-    for p in pixels:
-        r = getRed(p)
-        g = getGreen(p)
-        b = getBlue(p)
-        # Luminosity-weighted grayscale conversion (ITU-R BT.601 standard)
-        gray_value = int(0.299 * r + 0.587 * g + 0.114 * b)
-        gray_value = max(0, min(255, gray_value))
-        setColor(p, makeColor(gray_value, gray_value, gray_value))
-        hist[gray_value] += 1
-    return hist, pic
+    for px in getPixels(pic):
+        hist[getLuminance(px)] += 1
+    return hist
 
 
 def plot_histogram(hist, title_text):
