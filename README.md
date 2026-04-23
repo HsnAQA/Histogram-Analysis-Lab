@@ -33,13 +33,15 @@ output/                           # Generated images and histogram plots (gitign
 ## Examples
 
 ### Input Images
-| Low Contrast                            | Normal Contrast | High Contrast |
-|-----------------------------------------|---|---|
+| Low Contrast                            | Normal Contrast | High Contrast                             |
+|-----------------------------------------|---|-------------------------------------------|
 | ![Low Contrast](assets/example_low.jpg) | ![Normal Contrast](assets/example_normal.jpg) | ![High Contrast](assets/example_high.jpg) |
 
 ### App in Action
+
 **Console output**
 ![Console](assets/example_console.png)
+
 
 **Before equalization — image + histogram**
 ![Before](assets/example_before.png)
@@ -60,7 +62,14 @@ Run the full pipeline (Tasks 1–4):
 python src/App.py
 ```
 
-You will be prompted 3 times to pick an image — one low contrast, one normal, one high contrast. For each image the app prints a contrast summary to the console, then shows the original image with its histogram, followed by the equalized image with its new histogram. All outputs are saved to the `output/` folder.
+A menu appears with three categories: **1** Low Contrast, **2** Normal Contrast, **3** High Contrast, **0** Exit.
+
+1. Enter a category number.
+2. A file picker opens — select your image.
+3. The app prints a contrast summary to the console (Michelson, RMS, enhancement decision), then opens two windows: the original grayscale image with its histogram, then the equalized image with its new histogram. Close each window to advance.
+4. The menu reappears — repeat for as many images as you like, then enter **0** to exit.
+
+All output images are saved to the `output/` folder locally in the project file.
 
 Each task can also be run independently:
 ```

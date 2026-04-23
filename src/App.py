@@ -36,7 +36,7 @@ def show_step(pic, hist, title, filename):
 # =============================================================================
 # INTEGRATED PIPELINE (TASK 4)
 # =============================================================================
-def run_analysis_pipeline(pic_path, category, is_last=False):
+def run_analysis_pipeline(pic_path, category):
     """
     Orchestrates the full image processing workflow for a single image.
     """
@@ -85,22 +85,44 @@ def run_analysis_pipeline(pic_path, category, is_last=False):
 # MAIN
 # =============================================================================
 if __name__ == "__main__":
-    test_categories = ["Low Contrast", "Normal Contrast", "High Contrast"]
+    CATEGORIES = {
+        "1": "Low Contrast",
+        "2": "Normal Contrast",
+        "3": "High Contrast",
+    }
+
+    def print_menu():
+        print("\n1. Low Contrast")
+        print("2. Normal Contrast")
+        print("3. High Contrast")
+        print("0. Exit\n")
 
     print("=" * 55)
     print("  Histogram Analysis & Contrast Enhancement")
     print("=" * 55)
-    print("You will be prompted to select 3 images (Low / Normal / High contrast).")
-    print(f"Outputs will be saved to: {OUTPUT_DIR}")
+    print("Outputs saved to: /output")
+    print_menu()
 
-    for index, category in enumerate(test_categories):
-        print(f"\n>>> [{category}] Press ENTER to open file picker...")
-        input()
-        image_path = pickAFile()
+    while True:
+        cmd = input(">>> ").strip()
+
+        if cmd == "0":
+            print("\nTask complete.")
+            break
+
+        if cmd not in CATEGORIES:
+            print("  Invalid input.")
+            continue
+
+        category = CATEGORIES[cmd]
+        try:
+            image_path = pickAFile()
+        except Exception:
+            image_path = None
+
         if image_path:
-            is_last = index == len(test_categories) - 1
-            run_analysis_pipeline(image_path, category, is_last)
+            run_analysis_pipeline(image_path, category)
         else:
-            print(f"  Selection cancelled for '{category}'. Skipping.")
+            print("  No file selected.")
 
-    print("\nTask complete.")
+        print_menu()
